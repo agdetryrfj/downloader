@@ -1,10 +1,14 @@
 const { Telegraf, Markup } = require('telegraf');
 const axios = require('axios');
+const express = require('express');
 
 const BOT_TOKEN = '8966971586:AAHYHWpvQDeccAZ7zJQ--C4tMRriVXsd60E';
 const bot = new Telegraf(BOT_TOKEN);
+const app = express();
 
-// دستور Start
+const PORT = process.env.PORT || 3000;
+
+// دستور Start با دکمه شیشه‌ای سازنده
 bot.start((ctx) => {
     const welcomeMessage = 
         `سلام! به ربات دانلودر **BatDL** خوش آمدید.\n\n` +
@@ -17,72 +21,79 @@ bot.start((ctx) => {
     return ctx.replyWithMarkdown(welcomeMessage, keyboard);
 });
 
-// پردازش لینک‌های ارسالی برای دانلود
+// پردازش و دانلود لینک‌های ارسالی با موتور دوگانه قدرتمند
 bot.on('text', async (ctx) => {
-    const text = ctx.message.text;
+    const text = ctx.message.text.trim();
 
-    // اگر پیام لینک بود
     if (text.startsWith('http://') || text.startsWith('https://')) {
         const processingMsg = await ctx.reply('⏳ در حال دریافت اطلاعات و دانلود با بهترین کیفیت...');
 
+        let downloadUrl = null;
+
         try {
-            // استفاده از یک API عمومی قدرتمند برای دانلود ویدیو/تصویر
-            const apiUrl = `https://apis.davidcyriltech.my.id/download?url=${encodeURIComponent(text)}`;
-            const response = await axios.get(apiUrl, { timeout: 30000 });
-            const data = response.data;
+            // تلاش اول با API اصلی و سریع
+            try {
+                const apiUrl = `https://widipe.com/download?url=${encodeURIComponent(text)}`;
+                const response = await axios.get(apiUrl, { timeout: 15000 });
+                const resData = response.data;
+                if (resData && resData.result) {
+                    downloadUrl = resData.result.url || resData.result.dl_url || resData.result.video || (resData.result.medias && resData.result.medias[0]?.url);
+                }
+            } catch (err) {
+                console.log('Primary API failed, trying backup...');
+            }
 
-            if (data && (data.status === 200 || data.success || data.dl_url || data.video)) {
-                const downloadUrl = data.dl_url || data.video || data.link || (data.result && data.result.url);
+            // اگر تلاش اول نتیجه نداد، استفاده از API پشتیبان قدرتمند
+            if (!downloadUrl) {
+                const backupApi = `https://delirius-api-oficial.vercel.app/download/all?url=${encodeURIComponent(text)}`;
+                const backupRes = await axios.get(backupApi, { timeout: 15000 });
+                const backupData = backupRes.data;
+                if (backupData && backupData.status && backupData.data) {
+                    downloadUrl = backupData.data.url || backupData.data.download || backupData.data.video;
+                }
+            }
 
-                if (downloadUrl) {
-                    await ctx.deleteMessage(processingMsg.message_id).catch(() => {});
-                    
-                    // تشخیص نوع محتوا و ارسال به کاربر
-                    if (downloadUrl.match(/\.(mp4|m3u8|mov)$/i) || text.includes('instagram.com') || text.includes('tiktok.com')) {
-                        await ctx.replyWithVideo(downloadUrl, {
-                            caption: '✅ فایل شما با موفقیت دانلود شد.\n🤖 BatDL Bot'
-                        });
-                    } else if (downloadUrl.match(/\.(jpg|jpeg|png|webp)$/i)) {
-                        await ctx.replyWithPhoto(downloadUrl, {
-                            caption: '✅ تصویر شما با موفقیت دانلود شد.\n🤖 BatDL Bot'
-                        });
-                    } else {
-                        await ctx.reply(`✅ لینک دانلود آماده است:\n\n${downloadUrl}`);
-                    }
+            // پاک کردن پیام انتظار
+            await ctx.deleteMessage(processingMsg.message_id).catch(() => {});
+
+            if (downloadUrl) {
+                // ارسال به عنوان ویدیو یا عکس یا لینک مستقیم
+                if (typeof downloadUrl === 'string' && (downloadUrl.match(/\.(mp4|m3u8|mov|webm)$/i) || text.includes('instagram.com') || text.includes('tiktok.com') || text.includes('youtube.com') || text.includes('youtu.be') || text.includes('pinterest.com'))) {
+                    await ctx.replyWithVideo(downloadUrl, {
+                        caption: '✅ فایل شما با موفقیت دانلود شد.\n🤖 BatDL Bot'
+                    }).catch(async () => {
+                        // اگر حجم فایل بالا بود یا تلگرام خطا داد، لینک مستقیم فرستاده می‌شود
+                        await ctx.reply(`✅ لینک دانلود مستقیم آماده است:\n\n${downloadUrl}`);
+                    });
+                } else if (typeof downloadUrl === 'string' && downloadUrl.match(/\.(jpg|jpeg|png|webp)$/i)) {
+                    await ctx.replyWithPhoto(downloadUrl, {
+                        caption: '✅ تصویر شما با موفقیت دانلود شد.\n🤖 BatDL Bot'
+                    });
                 } else {
-                    throw new Error('لینک دانلود معتبری یافت نشد.');
+                    await ctx.reply(`✅ لینک دانلود آماده است:\n\n${downloadUrl}`);
                 }
             } else {
-                // روش جایگزین یا مدیریت خطا
-                await ctx.telegram.editMessageText(
-                    ctx.chat.id,
-                    processingMsg.message_id,
-                    null,
-                    '❌ متاسفانه در پردازش این لینک خطایی رخ داد یا لینک پشتیبانی نمی‌شود.'
-                );
+                await ctx.reply('❌ متاسفانه لینک دانلود معتبری برای این آدرس پیدا نشد. لطفاً لینک دیگری امتحان کنید.');
             }
+
         } catch (error) {
             console.error('Download Error:', error.message);
-            await ctx.telegram.editMessageText(
-                ctx.chat.id,
-                processingMsg.message.message_id || processingMsg.message_id,
-                null,
-                '❌ خطا در ارتباط با سرور دانلود. لطفا لینک دیگری را امتحان کنید.'
-            ).catch(() => {
-                ctx.reply('❌ خطا در پردازش درخواست.');
-            });
+            await ctx.deleteMessage(processingMsg.message_id).catch(() => {});
+            await ctx.reply('❌ خطا در ارتباط با سرور دانلود یا زمان انتظار به پایان رسید. لطفاً دوباره تلاش کنید.');
         }
     } else {
-        // اگر کاربر متن معمولی فرستاد
         await ctx.reply('لطفاً یک لینک معتبر (اینستاگرام، تیک‌تاک، پینترست و...) ارسال کنید.');
     }
 });
 
-// راه‌اندازی ربات
-bot.launch().then(() => {
-    console.log('Bot BatDL is running successfully!');
+// تنظیمات وب‌هوک و سرور Express برای Railway
+app.use(express.json());
+app.use(bot.webhookCallback('/'));
+
+app.get('/', (req, res) => {
+    res.send('BatDL Bot is active and running smoothly!');
 });
 
-// بستن امن ربات
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+});
