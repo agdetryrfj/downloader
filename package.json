@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "axios": "^1.7.9",
+    "btch-downloader": "^6.0.38",
     "express": "^4.21.2",
     "telegraf": "^4.16.3"
   },
