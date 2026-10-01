@@ -21,7 +21,7 @@ bot.start((ctx) => {
     return ctx.replyWithMarkdown(welcomeMessage, keyboard);
 });
 
-// پردازش و دانلود لینک‌های ارسالی با موتور دوگانه قدرتمند
+// پردازش و دانلود لینک‌های ارسالی با APIهای جدید و پایدار
 bot.on('text', async (ctx) => {
     const text = ctx.message.text.trim();
 
@@ -31,38 +31,49 @@ bot.on('text', async (ctx) => {
         let downloadUrl = null;
 
         try {
-            // تلاش اول با API اصلی و سریع
-            try {
-                const apiUrl = `https://widipe.com/download?url=${encodeURIComponent(text)}`;
-                const response = await axios.get(apiUrl, { timeout: 15000 });
-                const resData = response.data;
-                if (resData && resData.result) {
-                    downloadUrl = resData.result.url || resData.result.dl_url || resData.result.video || (resData.result.medias && resData.result.medias[0]?.url);
-                }
-            } catch (err) {
-                console.log('Primary API failed, trying backup...');
+            // تلاش ۱: استفاده از API مخصوص تیک‌تاک (اگر لینک تیک‌تاک باشد)
+            if (text.includes('tiktok.com')) {
+                try {
+                    const tikApi = `https://api.tikwm.com/api/?url=${encodeURIComponent(text)}`;
+                    const res = await axios.get(tikApi, { timeout: 10000 });
+                    if (res.data && res.data.data) {
+                        downloadUrl = res.data.data.play || res.data.data.hdplay;
+                    }
+                } catch (e) {}
             }
 
-            // اگر تلاش اول نتیجه نداد، استفاده از API پشتیبان قدرتمند
+            // تلاش ۲: استفاده از API عمومی قدرتمند سایبر (Axiom / All-in-one)
             if (!downloadUrl) {
-                const backupApi = `https://delirius-api-oficial.vercel.app/download/all?url=${encodeURIComponent(text)}`;
-                const backupRes = await axios.get(backupApi, { timeout: 15000 });
-                const backupData = backupRes.data;
-                if (backupData && backupData.status && backupData.data) {
-                    downloadUrl = backupData.data.url || backupData.data.download || backupData.data.video;
-                }
+                try {
+                    const generalApi = `https://api.siputzx.my.id/api/downloader/all?url=${encodeURIComponent(text)}`;
+                    const res = await axios.get(generalApi, { timeout: 12000 });
+                    if (res.data && res.data.status && res.data.data) {
+                        const d = res.data.data;
+                        downloadUrl = d.url || d.dl_url || d.video || (d.medias && d.medias[0]?.url);
+                    }
+                } catch (e) {}
+            }
+
+            // تلاش ۳: API جایگزین کمکی
+            if (!downloadUrl) {
+                try {
+                    const altApi = `https://apis.davidcyriltech.my.id/download?url=${encodeURIComponent(text)}`;
+                    const res = await axios.get(altApi, { timeout: 12000 });
+                    if (res.data) {
+                        downloadUrl = res.data.dl_url || res.data.video || res.data.link || (res.data.result && res.data.result.url);
+                    }
+                } catch (e) {}
             }
 
             // پاک کردن پیام انتظار
             await ctx.deleteMessage(processingMsg.message_id).catch(() => {});
 
             if (downloadUrl) {
-                // ارسال به عنوان ویدیو یا عکس یا لینک مستقیم
-                if (typeof downloadUrl === 'string' && (downloadUrl.match(/\.(mp4|m3u8|mov|webm)$/i) || text.includes('instagram.com') || text.includes('tiktok.com') || text.includes('youtube.com') || text.includes('youtu.be') || text.includes('pinterest.com'))) {
+                // ارسال ویدیو یا لینک
+                if (typeof downloadUrl === 'string' && (downloadUrl.match(/\.(mp4|m3u8|mov|webm)$/i) || text.includes('instagram.com') || text.includes('tiktok.com') || text.includes('youtube.com') || text.includes('pinterest.com'))) {
                     await ctx.replyWithVideo(downloadUrl, {
                         caption: '✅ فایل شما با موفقیت دانلود شد.\n🤖 BatDL Bot'
                     }).catch(async () => {
-                        // اگر حجم فایل بالا بود یا تلگرام خطا داد، لینک مستقیم فرستاده می‌شود
                         await ctx.reply(`✅ لینک دانلود مستقیم آماده است:\n\n${downloadUrl}`);
                     });
                 } else if (typeof downloadUrl === 'string' && downloadUrl.match(/\.(jpg|jpeg|png|webp)$/i)) {
@@ -73,13 +84,13 @@ bot.on('text', async (ctx) => {
                     await ctx.reply(`✅ لینک دانلود آماده است:\n\n${downloadUrl}`);
                 }
             } else {
-                await ctx.reply('❌ متاسفانه لینک دانلود معتبری برای این آدرس پیدا نشد. لطفاً لینک دیگری امتحان کنید.');
+                await ctx.reply('❌ متاسفانه لینک دانلود از این آدرس استخراج نشد. لطفاً لینک معتبر دیگری امتحان کنید.');
             }
 
         } catch (error) {
             console.error('Download Error:', error.message);
             await ctx.deleteMessage(processingMsg.message_id).catch(() => {});
-            await ctx.reply('❌ خطا در ارتباط با سرور دانلود یا زمان انتظار به پایان رسید. لطفاً دوباره تلاش کنید.');
+            await ctx.reply('❌ خطا در ارتباط با سرور دانلود. لطفاً دوباره تلاش کنید.');
         }
     } else {
         await ctx.reply('لطفاً یک لینک معتبر (اینستاگرام، تیک‌تاک، پینترست و...) ارسال کنید.');
