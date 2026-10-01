@@ -1,4 +1,5 @@
 const { Telegraf, Markup } = require('telegraf');
+const { ttdl, igdl, pinterest, youtube } = require('btch-downloader');
 const axios = require('axios');
 const express = require('express');
 
@@ -21,55 +22,43 @@ bot.start((ctx) => {
     return ctx.replyWithMarkdown(welcomeMessage, keyboard);
 });
 
-// پردازش و دانلود لینک‌های ارسالی با APIهای جدید و پایدار
+// پردازش و دانلود لینک‌ها با کتابخانه قدرتمند
 bot.on('text', async (ctx) => {
     const text = ctx.message.text.trim();
 
     if (text.startsWith('http://') || text.startsWith('https://')) {
         const processingMsg = await ctx.reply('⏳ در حال دریافت اطلاعات و دانلود با بهترین کیفیت...');
-
         let downloadUrl = null;
 
         try {
-            // تلاش ۱: استفاده از API مخصوص تیک‌تاک (اگر لینک تیک‌تاک باشد)
-            if (text.includes('tiktok.com')) {
-                try {
-                    const tikApi = `https://api.tikwm.com/api/?url=${encodeURIComponent(text)}`;
-                    const res = await axios.get(tikApi, { timeout: 10000 });
-                    if (res.data && res.data.data) {
-                        downloadUrl = res.data.data.play || res.data.data.hdplay;
-                    }
-                } catch (e) {}
+            // تشخیص پلتفرم و دانلود با کتابخانه اختصاصی
+            if (text.includes('tiktok.com') || text.includes('vm.tiktok.com')) {
+                const res = await ttdl(text);
+                downloadUrl = res?.video || res?.url || res?.data?.[0]?.url;
+            } 
+            else if (text.includes('instagram.com')) {
+                const res = await igdl(text);
+                downloadUrl = res?.[0]?.url || res?.[0];
+            } 
+            else if (text.includes('pinterest.com') || text.includes('pin.it')) {
+                const res = await pinterest(text);
+                downloadUrl = res?.url || res?.dl_url;
+            } 
+            else if (text.includes('youtube.com') || text.includes('youtu.be')) {
+                const res = await youtube(text);
+                downloadUrl = res?.dl_url || res?.url;
             }
 
-            // تلاش ۲: استفاده از API عمومی قدرتمند سایبر (Axiom / All-in-one)
-            if (!downloadUrl) {
-                try {
-                    const generalApi = `https://api.siputzx.my.id/api/downloader/all?url=${encodeURIComponent(text)}`;
-                    const res = await axios.get(generalApi, { timeout: 12000 });
-                    if (res.data && res.data.status && res.data.data) {
-                        const d = res.data.data;
-                        downloadUrl = d.url || d.dl_url || d.video || (d.medias && d.medias[0]?.url);
-                    }
-                } catch (e) {}
-            }
-
-            // تلاش ۳: API جایگزین کمکی
-            if (!downloadUrl) {
-                try {
-                    const altApi = `https://apis.davidcyriltech.my.id/download?url=${encodeURIComponent(text)}`;
-                    const res = await axios.get(altApi, { timeout: 12000 });
-                    if (res.data) {
-                        downloadUrl = res.data.dl_url || res.data.video || res.data.link || (res.data.result && res.data.result.url);
-                    }
-                } catch (e) {}
+            // اگر کتابخانه خروجی نداد، از API پشتیبان تیک‌تاک/عمومی استفاده کن
+            if (!downloadUrl && text.includes('tiktok.com')) {
+                const tikRes = await axios.get(`https://api.tikwm.com/api/?url=${encodeURIComponent(text)}`, { timeout: 10000 });
+                downloadUrl = tikRes.data?.data?.play || tikRes.data?.data?.hdplay;
             }
 
             // پاک کردن پیام انتظار
             await ctx.deleteMessage(processingMsg.message_id).catch(() => {});
 
             if (downloadUrl) {
-                // ارسال ویدیو یا لینک
                 if (typeof downloadUrl === 'string' && (downloadUrl.match(/\.(mp4|m3u8|mov|webm)$/i) || text.includes('instagram.com') || text.includes('tiktok.com') || text.includes('youtube.com') || text.includes('pinterest.com'))) {
                     await ctx.replyWithVideo(downloadUrl, {
                         caption: '✅ فایل شما با موفقیت دانلود شد.\n🤖 BatDL Bot'
@@ -90,10 +79,10 @@ bot.on('text', async (ctx) => {
         } catch (error) {
             console.error('Download Error:', error.message);
             await ctx.deleteMessage(processingMsg.message_id).catch(() => {});
-            await ctx.reply('❌ خطا در ارتباط با سرور دانلود. لطفاً دوباره تلاش کنید.');
+            await ctx.reply('❌ خطا در پردازش لینک. لطفاً دوباره تلاش کنید.');
         }
     } else {
-        await ctx.reply('لطفاً یک لینک معتبر (اینستاگرام، تیک‌تاک، پینترست و...) ارسال کنید.');
+        await ctx.reply('لطفاً یک لینک معتبر ارسال کنید.');
     }
 });
 
