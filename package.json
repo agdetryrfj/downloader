@@ -1,0 +1,16 @@
+{
+  "name": "batdl-bot",
+  "version": "1.0.0",
+  "description": "All-in-one downloader Telegram bot",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.9",
+    "telegraf": "^4.16.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
